@@ -29,28 +29,37 @@ class ChaosInjector:
     
     def inject_random_failure(self, agents: List[BaseAgent], count: int = 2):
         """
-        Inject random failures into multiple agents
-        
-        Args:
-            agents: Pool of agents
-            count: Number of agents to infect
+        Inject random failures into multiple agents.
+        Uses a mix of infection types; some are severe (multi-signal or extreme).
         """
+        # All infection types: (key, display_name). Severe ones produce high severity.
         infection_types = [
             ("token_explosion", "TOKEN SPIKE"),
             ("tool_loop", "TOOL LOOP"),
-            ("latency_spike", "LATENCY SPIKE")
+            ("latency_spike", "LATENCY SPIKE"),
+            ("high_retry_rate", "HIGH RETRY RATE"),
+            ("prompt_drift", "PROMPT DRIFT"),
+            ("memory_corruption", "MEMORY CORRUPTION"),
+            ("full_meltdown", "FULL MELTDOWN"),
+        ]
+        # Severe types (multi-signal or very high deviation) — pick these ~40% of the time
+        severe_types = [
+            ("prompt_drift", "PROMPT DRIFT"),
+            ("memory_corruption", "MEMORY CORRUPTION"),
+            ("full_meltdown", "FULL MELTDOWN"),
         ]
         
-        # Select random agents
         available = [a for a in agents if not a.infected]
         if len(available) < count:
             count = len(available)
         
         targets = random.sample(available, count)
-        
         results = []
         for agent in targets:
-            infection_type, name = random.choice(infection_types)
+            if severe_types and random.random() < 0.4:
+                infection_type, name = random.choice(severe_types)
+            else:
+                infection_type, name = random.choice(infection_types)
             agent.infect(infection_type)
             self.injected_agents.add(agent.agent_id)
             results.append((agent.agent_id, name))

@@ -25,13 +25,14 @@ async def main():
     
     # Create immune system orchestrator
     orchestrator = ImmuneSystemOrchestrator(agents)
-    
-    # Start web dashboard
+
+    # Start web dashboard (pass loop so approve-healing can schedule heal from Flask thread)
     dashboard = WebDashboard(orchestrator, port=8090)
+    dashboard.set_loop(asyncio.get_running_loop())
     dashboard.start()
-    
+
     # Run for 2 minutes (120 seconds) - adjust as needed
-    await orchestrator.run(duration_seconds=120)
+    await orchestrator.run(duration_seconds=1200)
 
 
 if __name__ == "__main__":

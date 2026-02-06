@@ -84,12 +84,14 @@ class Sentinel:
         retry_rate = sum(1 for v in recent_sample if v.retries > 0) / len(recent_sample)
         if retry_rate > 0.3:  # More than 30% retries
             anomalies.append(AnomalyType.HIGH_RETRY_RATE)
-            deviations['retry_rate'] = retry_rate
+            # Scale so severity can reach 10 (retry_rate 1.0 -> 10)
+            deviations['retry_rate'] = retry_rate * 10.0
         
         # If any anomalies detected, create infection report
         if anomalies:
-            # Calculate severity (max deviation, capped at 10)
-            severity = min(10.0, max(deviations.values()))
+            # Severity 0-10: compress high deviations so we get spread (5-10), not always 10
+            max_dev = max(deviations.values())
+            severity = min(10.0, round(2.0 + max_dev * 0.45, 1))  # e.g. dev 6->4.7, 12->7.4, 18->10
             
             return InfectionReport(
                 agent_id=baseline.agent_id,

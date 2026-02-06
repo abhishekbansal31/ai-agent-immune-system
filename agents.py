@@ -41,9 +41,11 @@ class AgentState:
 class BaseAgent:
     """Base agent class with telemetry emission"""
     
-    def __init__(self, agent_id: str, agent_type: str):
+    def __init__(self, agent_id: str, agent_type: str, model_name: str = "GPT-4", mcp_servers: List[str] = None):
         self.agent_id = agent_id
         self.agent_type = agent_type
+        self.model_name = model_name
+        self.mcp_servers = mcp_servers or []
         self.state = AgentState()
         self.status = AgentStatus.HEALTHY
         self.execution_count = 0
@@ -72,12 +74,12 @@ class BaseAgent:
             latency_ms = self._infected_latency()
             token_count = self._infected_tokens()
             tool_calls = self._infected_tool_calls()
+            retries = self._infected_retries()
         else:
             latency_ms = int(self.base_latency_ms * variance)
             token_count = int(self.base_tokens * variance)
             tool_calls = max(1, int(self.base_tool_calls * variance))
-        
-        retries = 1 if random.random() > 0.9 else 0
+            retries = 1 if random.random() > 0.9 else 0
         success = random.random() > 0.05  # 95% success rate normally
         
         self.execution_count += 1
@@ -96,22 +98,36 @@ class BaseAgent:
         }
     
     def _infected_latency(self) -> int:
-        """Modified latency when infected"""
+        """Modified latency when infected (varied so severity spreads 5-10)"""
         if self.infection_type == "latency_spike":
+            return self.base_latency_ms * random.randint(3, 7)
+        if self.infection_type in ("prompt_drift", "memory_corruption", "full_meltdown"):
             return self.base_latency_ms * random.randint(3, 6)
         return self.base_latency_ms
     
     def _infected_tokens(self) -> int:
-        """Modified token usage when infected"""
+        """Modified token usage when infected (varied so severity spreads 5-10)"""
         if self.infection_type == "token_explosion":
-            return self.base_tokens * random.randint(5, 8)
+            return self.base_tokens * random.randint(4, 9)
+        if self.infection_type in ("prompt_drift", "full_meltdown"):
+            return self.base_tokens * random.randint(4, 8)
         return self.base_tokens
     
     def _infected_tool_calls(self) -> int:
-        """Modified tool calls when infected"""
+        """Modified tool calls when infected (varied so severity spreads 5-10)"""
         if self.infection_type == "tool_loop":
-            return self.base_tool_calls * random.randint(6, 10)
+            return self.base_tool_calls * random.randint(5, 11)
+        if self.infection_type == "full_meltdown":
+            return self.base_tool_calls * random.randint(5, 10)
         return self.base_tool_calls
+    
+    def _infected_retries(self) -> int:
+        """Modified retry behavior when infected (for high_retry_rate / memory_corruption)"""
+        if self.infection_type == "high_retry_rate":
+            return 1 if random.random() > 0.25 else 0  # ~75% retries
+        if self.infection_type == "memory_corruption":
+            return 1 if random.random() > 0.3 else 0   # ~70% retries
+        return 1 if random.random() > 0.9 else 0
     
     def infect(self, infection_type: str):
         """Infect the agent with specific problem"""
@@ -166,14 +182,48 @@ class CoordinatorAgent(BaseAgent):
         self.base_tool_calls = random.randint(5, 8)
 
 
+# Real-world AI agent names (VPN, Docker, Slack, DB, network, etc.)
+AGENT_NAMES = [
+    "VPN",
+    "Docker",
+    "Slack",
+    "Postgres",
+    "Network",
+    "GitHub",
+    "Kubernetes",
+    "Nginx",
+    "Redis",
+    "Elasticsearch",
+    "Notion",
+    "Figma",
+    "Linear",
+    "SendGrid",
+    "Brave Search",
+]
+
+# Example models and MCP servers for dashboard display (hackathon realism)
+MODELS = ["GPT-5", "Claude Sonnet 4", "Claude Opus 4", "Gemini 2.0", "GPT-4o", "Claude Sonnet 3.5"]
+MCP_SERVER_PRESETS = [
+    ["filesystem", "github", "slack"],
+    ["postgres", "web-fetch", "notion"],
+    ["google-drive", "figma", "linear"],
+    ["brave-search", "fetch", "memory"],
+    ["filesystem", "postgres", "sendgrid"],
+    ["github", "slack", "notion"],
+]
+
+
 def create_agent_pool(count: int) -> List[BaseAgent]:
-    """Create a pool of diverse agents"""
+    """Create a pool of diverse agents with real-world names and model/MCP labels"""
     agents = []
-    agent_types = [ResearchAgent, DataAgent, AnalyticsAgent, CoordinatorAgent]
+    agent_classes = [ResearchAgent, DataAgent, AnalyticsAgent, CoordinatorAgent]
+    names = (AGENT_NAMES * ((count // len(AGENT_NAMES)) + 1))[:count]
     
     for i in range(count):
-        agent_type = agent_types[i % len(agent_types)]
-        agent = agent_type(f"Agent-{i+1}")
+        agent_cls = agent_classes[i % len(agent_classes)]
+        agent = agent_cls(names[i])
+        agent.model_name = MODELS[i % len(MODELS)]
+        agent.mcp_servers = MCP_SERVER_PRESETS[i % len(MCP_SERVER_PRESETS)]
         agents.append(agent)
     
     return agents
