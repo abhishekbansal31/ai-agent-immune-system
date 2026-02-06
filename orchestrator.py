@@ -79,7 +79,7 @@ class ImmuneSystemOrchestrator:
 
         # Severe infections awaiting UI approval (agent_id -> {infection, diagnosis, requested_at})
         self._pending_approvals: Dict[str, Dict[str, Any]] = {}
-        # Rejected approvals: agent stays quarantined until user clicks "Heal explicitly (after reject)"
+        # Rejected approvals: agent stays quarantined until user clicks "Heal now"
         self._rejected_approvals: Dict[str, Dict[str, Any]] = {}
         self._pending_lock = threading.Lock()
 
@@ -157,7 +157,7 @@ class ImmuneSystemOrchestrator:
                 infection = self.sentinel.detect_infection(recent, baseline)
                 
                 if infection:
-                    # Skip if user previously rejected healing — wait for "Heal explicitly (after reject)"
+                    # Skip if user previously rejected healing — wait for "Heal now"
                     with self._pending_lock:
                         if agent_id in self._rejected_approvals:
                             continue
@@ -213,7 +213,7 @@ class ImmuneSystemOrchestrator:
         """
         Approve or reject healing for a severe infection (thread-safe).
         Returns (infection, approved). If approved, caller should schedule heal_agent(agent_id, infection).
-        If rejected, agent stays quarantined until user clicks "Heal explicitly (after reject)".
+        If rejected, agent stays quarantined until user clicks "Heal now".
         """
         with self._pending_lock:
             entry = self._pending_approvals.pop(agent_id, None)
@@ -232,8 +232,22 @@ class ImmuneSystemOrchestrator:
                 'diagnosis': diagnosis,
                 'rejected_at': time.time(),
             }
-        print_flush(colored(f"🚫 Healing rejected for {agent_id} — quarantined until you click 'Heal explicitly (after reject)' in the dashboard", Colors.YELLOW))
+        print_flush(colored(f"🚫 Healing rejected for {agent_id} — quarantined until you click 'Heal now' in the dashboard", Colors.YELLOW))
         return None, False
+
+    def approve_all_pending(self, approved: bool) -> List[Tuple[str, InfectionReport]]:
+        """
+        Approve or reject all pending approvals (thread-safe).
+        Returns list of (agent_id, infection) for approved ones so caller can schedule heal_agent for each.
+        """
+        with self._pending_lock:
+            agent_ids = list(self._pending_approvals.keys())
+        approved_list = []
+        for agent_id in agent_ids:
+            infection, did_approve = self.approve_healing(agent_id, approved)
+            if did_approve and infection:
+                approved_list.append((agent_id, infection))
+        return approved_list
 
     def get_rejected_approvals(self) -> List[Dict[str, Any]]:
         """Return list of agents whose healing was rejected (thread-safe)."""
@@ -264,8 +278,22 @@ class ImmuneSystemOrchestrator:
             return None
         infection = entry['infection']
         self._log_action("explicit_heal_requested", agent_id)
-        print_flush(colored(f"💊 {agent_id} — healing started explicitly (after reject)", Colors.GREEN))
+        print_flush(colored(f"💊 {agent_id} — healing started (Heal now)", Colors.GREEN))
         return infection
+
+    def start_healing_all_rejected(self) -> List[Tuple[str, InfectionReport]]:
+        """
+        Start healing for all rejected agents (thread-safe).
+        Removes all from rejected and returns list of (agent_id, infection) so caller can schedule heal_agent for each.
+        """
+        with self._pending_lock:
+            agent_ids = list(self._rejected_approvals.keys())
+        result = []
+        for agent_id in agent_ids:
+            infection = self.start_healing_explicitly(agent_id)
+            if infection:
+                result.append((agent_id, infection))
+        return result
 
     async def heal_agent(self, agent_id: str, infection: InfectionReport, trigger: str = "auto"):
         """Heal an infected agent (with visible delays so UI can show progress)."""

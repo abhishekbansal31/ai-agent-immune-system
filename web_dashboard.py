@@ -27,8 +27,10 @@ class WebDashboard:
         self.app.route('/api/stats')(self.get_stats)
         self.app.route('/api/pending-approvals')(self.get_pending_approvals)
         self.app.route('/api/approve-healing', methods=['POST'])(self.post_approve_healing)
+        self.app.route('/api/approve-all', methods=['POST'])(self.post_approve_all)
         self.app.route('/api/rejected-approvals')(self.get_rejected_approvals)
         self.app.route('/api/heal-explicitly', methods=['POST'])(self.post_heal_explicitly)
+        self.app.route('/api/heal-all-rejected', methods=['POST'])(self.post_heal_all_rejected)
 
     def set_loop(self, loop: asyncio.AbstractEventLoop):
         """Set the asyncio event loop so approve-healing can schedule heal from Flask thread."""
@@ -93,7 +95,7 @@ class WebDashboard:
         return jsonify(self.orchestrator.get_pending_approvals())
 
     def get_rejected_approvals(self):
-        """Get agents whose healing was rejected (waiting for 'Heal explicitly')."""
+        """Get agents whose healing was rejected (waiting for 'Heal now')."""
         return jsonify(self.orchestrator.get_rejected_approvals())
 
     def post_heal_explicitly(self):
@@ -110,6 +112,17 @@ class WebDashboard:
             )
         return jsonify({'ok': infection is not None})
 
+    def post_heal_all_rejected(self):
+        """Start healing for all rejected agents (Heal all)."""
+        healed_list = self.orchestrator.start_healing_all_rejected()
+        if healed_list and self._loop:
+            for agent_id, infection in healed_list:
+                asyncio.run_coroutine_threadsafe(
+                    self.orchestrator.heal_agent(agent_id, infection, trigger="explicit_after_reject"),
+                    self._loop,
+                )
+        return jsonify({'ok': True, 'healed_count': len(healed_list)})
+
     def post_approve_healing(self):
         """Approve or reject healing for a severe infection (POST JSON: agent_id, approved)."""
         data = request.get_json(silent=True) or {}
@@ -125,13 +138,33 @@ class WebDashboard:
             )
         return jsonify({'ok': True, 'approved': did_approve})
 
+    def post_approve_all(self):
+        """Approve or reject all pending approvals (POST JSON: approved)."""
+        data = request.get_json(silent=True) or {}
+        approved = data.get('approved', False)
+        pending_count = len(self.orchestrator.get_pending_approvals())
+        approved_list = self.orchestrator.approve_all_pending(approved)
+        if approved and approved_list and self._loop:
+            for agent_id, infection in approved_list:
+                asyncio.run_coroutine_threadsafe(
+                    self.orchestrator.heal_agent(agent_id, infection, trigger="after_approval"),
+                    self._loop,
+                )
+        return jsonify({
+            'ok': True,
+            'approved_count': len(approved_list),
+            'rejected_count': 0 if approved else pending_count,
+        })
+
     def get_stats(self):
         """Get overall statistics"""
         patterns = self.orchestrator.immune_memory.get_pattern_summary()
+        runtime_seconds = time.time() - self.orchestrator.start_time
         
         return jsonify({
             'total_agents': len(self.orchestrator.agents),
             'total_executions': self.orchestrator.telemetry.total_executions,
+            'runtime': runtime_seconds,
             'baselines_learned': len(self.orchestrator.baseline_learner.baselines),
             'total_infections': self.orchestrator.total_infections,
             'total_healed': self.orchestrator.total_healed,
@@ -485,19 +518,6 @@ HTML_TEMPLATE = """
             color: #C62828;
         }
         
-        .refresh-indicator {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background: rgba(255,255,255,0.95);
-            padding: 10px 20px;
-            border-radius: 20px;
-            box-shadow: 0 2px 12px rgba(0,0,0,0.2);
-            font-size: 0.9em;
-            color: #475569;
-            z-index: 1000;
-        }
-        
         .learned-patterns {
             display: grid;
             gap: 10px;
@@ -567,6 +587,60 @@ HTML_TEMPLATE = """
             margin-top: 4px;
         }
         
+        .pending-actions-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        
+        .btn-approve-all, .btn-reject-all {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .btn-approve-all {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .btn-approve-all:hover {
+            background: #43A047;
+        }
+        
+        .btn-reject-all {
+            background: #f44336;
+            color: white;
+        }
+        
+        .btn-reject-all:hover {
+            background: #E53935;
+        }
+        
+        .rejected-actions-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        
+        .btn-heal-all {
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.9em;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            background: #2196F3;
+            color: white;
+        }
+        
+        .btn-heal-all:hover {
+            background: #1976D2;
+        }
+        
         .pending-approval-actions {
             display: flex;
             gap: 8px;
@@ -584,6 +658,30 @@ HTML_TEMPLATE = """
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            position: relative;
+        }
+        
+        .btn-approve::after, .btn-reject::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-6px);
+            padding: 4px 8px;
+            font-size: 0.75em;
+            font-weight: 600;
+            white-space: nowrap;
+            background: #333;
+            color: #fff;
+            border-radius: 4px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+        
+        .btn-approve:hover::after, .btn-reject:hover::after {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-4px);
         }
         
         .btn-approve {
@@ -706,6 +804,32 @@ HTML_TEMPLATE = """
             display: inline-flex;
             align-items: center;
             justify-content: center;
+            position: relative;
+        }
+        
+        .agent-card-pending-block .btn-approve-inline::after,
+        .agent-card-pending-block .btn-reject-inline::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-6px);
+            padding: 4px 8px;
+            font-size: 0.75em;
+            font-weight: 600;
+            white-space: nowrap;
+            background: #333;
+            color: #fff;
+            border-radius: 4px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease, transform 0.15s ease;
+        }
+        
+        .agent-card-pending-block .btn-approve-inline:hover::after,
+        .agent-card-pending-block .btn-reject-inline:hover::after {
+            opacity: 1;
+            transform: translateX(-50%) translateY(-4px);
         }
         
         .agent-card-pending-block .btn-approve-inline {
@@ -743,10 +867,6 @@ HTML_TEMPLATE = """
     </style>
 </head>
 <body>
-    <div class="refresh-indicator">
-        🔄 Auto-refresh: <span id="countdown">2</span>s
-    </div>
-    
     <div class="container">
         <div class="header">
             <h1>🛡️ AI Agent Immune System</h1>
@@ -790,7 +910,11 @@ HTML_TEMPLATE = """
                 <span class="section-arrow">▼</span>
             </div>
             <div class="section-body">
-                <p class="section-desc">Severe infections require your approval before healing. Approve to start healing; reject to keep agent quarantined until you click "Heal explicitly (after reject)".</p>
+                <p class="section-desc">Severe infections require your approval before healing. Approve to start healing; reject to keep agent quarantined until you click "Heal now".</p>
+                <div class="pending-actions-row" id="pending-actions-row" style="display: none;">
+                    <button type="button" class="btn-approve-all" id="btn-approve-all" title="Approve healing for all pending">Approve all</button>
+                    <button type="button" class="btn-reject-all" id="btn-reject-all" title="Reject healing for all pending">Reject all</button>
+                </div>
                 <div id="pending-approvals-list"></div>
             </div>
         </div>
@@ -801,7 +925,10 @@ HTML_TEMPLATE = """
                 <span class="section-arrow">▼</span>
             </div>
             <div class="section-body">
-                <p class="section-desc">Healing was rejected for these agents. They stay quarantined. Click "Heal explicitly (after reject)" to start healing directly.</p>
+                <p class="section-desc">Healing was rejected for these agents. They stay quarantined. Click "Heal now" to start healing.</p>
+                <div class="rejected-actions-row" id="rejected-actions-row" style="display: none;">
+                    <button type="button" class="btn-heal-all" id="btn-heal-all" title="Start healing for all rejected">Heal all</button>
+                </div>
                 <div id="rejected-approvals-list"></div>
             </div>
         </div>
@@ -840,8 +967,6 @@ HTML_TEMPLATE = """
     </div>
     
     <script>
-        let countdown = 2;
-        
         async function fetchData() {
             try {
                 const [stats, agents, healings, status, pendingApprovals] = await Promise.all([
@@ -878,10 +1003,13 @@ HTML_TEMPLATE = """
         
         function updatePendingApprovals(list) {
             const container = document.getElementById('pending-approvals-list');
+            const actionsRow = document.getElementById('pending-actions-row');
             if (!list || list.length === 0) {
+                if (actionsRow) actionsRow.style.display = 'none';
                 container.innerHTML = '<div class="empty-state">No pending approvals</div>';
                 return;
             }
+            if (actionsRow) actionsRow.style.display = 'flex';
             container.innerHTML = list.map(p => `
                 <div class="pending-approval-card" data-agent-id="${p.agent_id}">
                     <div class="info">
@@ -891,8 +1019,8 @@ HTML_TEMPLATE = """
                         <div class="meta" style="margin-top: 4px;">${p.reasoning}</div>
                     </div>
                     <div class="pending-approval-actions">
-                        <button class="btn-approve" onclick="approveHealing('${p.agent_id}', true)" title="Approve healing">✓</button>
-                        <button class="btn-reject" onclick="approveHealing('${p.agent_id}', false)" title="Reject healing">✗</button>
+                        <button class="btn-approve" data-tooltip="Approve" onclick="approveHealing('${p.agent_id}', true)" title="Approve healing">✓</button>
+                        <button class="btn-reject" data-tooltip="Reject" onclick="approveHealing('${p.agent_id}', false)" title="Reject healing">✗</button>
                     </div>
                 </div>
             `).join('');
@@ -916,10 +1044,13 @@ HTML_TEMPLATE = """
         
         function updateRejectedApprovals(list) {
             const container = document.getElementById('rejected-approvals-list');
+            const actionsRow = document.getElementById('rejected-actions-row');
             if (!list || list.length === 0) {
+                if (actionsRow) actionsRow.style.display = 'none';
                 container.innerHTML = '<div class="empty-state">No rejected healings</div>';
                 return;
             }
+            if (actionsRow) actionsRow.style.display = 'flex';
             container.innerHTML = list.map(p => `
                 <div class="pending-approval-card rejected-card">
                     <div class="info">
@@ -927,7 +1058,7 @@ HTML_TEMPLATE = """
                         <div>Severity: ${p.severity}/10 · ${p.diagnosis_type}</div>
                         <div class="meta">${p.anomalies.join(', ')}</div>
                     </div>
-                    <button class="btn-retry" onclick="healExplicitly('${p.agent_id}')">Heal explicitly (after reject)</button>
+                    <button class="btn-retry" onclick="healExplicitly('${p.agent_id}')">Heal now</button>
                 </div>
             `).join('');
         }
@@ -944,7 +1075,7 @@ HTML_TEMPLATE = """
                     fetchData();
                 }
             } catch (e) {
-                console.error('Heal explicitly failed:', e);
+                console.error('Heal now failed:', e);
             }
         }
         
@@ -955,8 +1086,8 @@ HTML_TEMPLATE = """
             document.getElementById('stat-healed').textContent = stats.total_healed;
             document.getElementById('stat-success').textContent = (stats.success_rate * 100).toFixed(0) + '%';
             
-            const runtime = Math.floor(stats.total_executions / stats.total_agents * 0.5);
-            document.getElementById('stat-runtime').textContent = runtime + 's';
+            const runtimeSec = (stats.runtime != null) ? Math.floor(stats.runtime) : 0;
+            document.getElementById('stat-runtime').textContent = runtimeSec + 's';
             
             const status = document.querySelector('.header .subtitle');
             if (stats.baselines_learned > 0) {
@@ -976,15 +1107,15 @@ HTML_TEMPLATE = """
                     ? `<div class="agent-card-pending-block">
                         <span class="pending-label">Action required</span>
                         <div class="pending-actions">
-                            <button type="button" class="btn-approve-inline" data-approve="true" title="Approve healing">✓</button>
-                            <button type="button" class="btn-reject-inline" data-approve="false" title="Reject healing">✗</button>
+                            <button type="button" class="btn-approve-inline" data-approve="true" data-tooltip="Approve" title="Approve healing">✓</button>
+                            <button type="button" class="btn-reject-inline" data-approve="false" data-tooltip="Reject" title="Reject healing">✗</button>
                         </div>
                        </div>`
                     : '';
                 const rejectedHtml = isRejected
                     ? `<div class="agent-card-rejected-block">
                         <span class="rejected-label">Healing was rejected</span>
-                        <button type="button" class="btn-retry-inline">Heal explicitly (after reject)</button>
+                        <button type="button" class="btn-retry-inline">Heal now</button>
                        </div>`
                     : '';
                 const mcpStr = (agent.mcp_servers && agent.mcp_servers.length) ? agent.mcp_servers.slice(0, 3).join(', ') : '';
@@ -1025,15 +1156,15 @@ HTML_TEMPLATE = """
                 case 'user_rejected':
                     return { rowClass: 'user-rejected', html: `
                         <div><strong>${agent}</strong>: User rejected healing</div>
-                        <div style="font-size: 0.8em; color: #666;">Agent stays quarantined until you heal explicitly</div>
+                        <div style="font-size: 0.8em; color: #666;">Agent stays quarantined until you choose Heal now</div>
                     `, badge: '🚫 Rejected' };
                 case 'explicit_heal_requested':
                     return { rowClass: 'retry', html: `
-                        <div><strong>${agent}</strong>: User started healing explicitly (after reject)</div>
+                        <div><strong>${agent}</strong>: User chose Heal now</div>
                         <div style="font-size: 0.8em; color: #666;">Healing in progress</div>
                     `, badge: '💊 Heal' };
                 case 'healing_attempt':
-                    const triggerLabels = { after_approval: 'After approval', explicit_after_reject: 'Heal after reject', auto: 'Auto-healed' };
+                    const triggerLabels = { after_approval: 'After approval', explicit_after_reject: 'Heal now', auto: 'Auto-healed' };
                     const triggerLabel = triggerLabels[h.trigger] || h.trigger || 'Auto-healed';
                     const triggerClasses = { after_approval: 'after-approval', explicit_after_reject: 'explicit-reject', auto: 'auto' };
                     const triggerClass = triggerClasses[h.trigger] || 'auto';
@@ -1084,16 +1215,35 @@ HTML_TEMPLATE = """
         }
         
         // Auto-refresh every 1s (must match orchestrator.TICK_INTERVAL_SECONDS)
-        const POLL_INTERVAL_MS = 1000;
-        setInterval(() => {
-            countdown--;
-            document.getElementById('countdown').textContent = countdown;
-            
-            if (countdown <= 0) {
-                fetchData();
-                countdown = 1;
+        setInterval(fetchData, 1000);
+        
+        document.getElementById('btn-approve-all').addEventListener('click', function() { approveAll(true); });
+        document.getElementById('btn-reject-all').addEventListener('click', function() { approveAll(false); });
+        document.getElementById('btn-heal-all').addEventListener('click', function() { healAllRejected(); });
+        
+        async function healAllRejected() {
+            try {
+                const res = await fetch('/api/heal-all-rejected', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+                const data = await res.json();
+                if (data.ok) fetchData();
+            } catch (e) {
+                console.error('Heal all failed:', e);
             }
-        }, POLL_INTERVAL_MS);
+        }
+        
+        async function approveAll(approved) {
+            try {
+                const res = await fetch('/api/approve-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ approved: approved })
+                });
+                const data = await res.json();
+                if (data.ok) fetchData();
+            } catch (e) {
+                console.error('Approve all / Reject all failed:', e);
+            }
+        }
         
         // Collapsible section headers
         document.querySelectorAll('.section-header-toggle').forEach(function(header) {
@@ -1103,7 +1253,7 @@ HTML_TEMPLATE = """
             });
         });
         
-        // Delegated click for Heal explicitly (after reject)
+        // Delegated click for Heal now
         document.getElementById('agents-grid').addEventListener('click', function(e) {
             const healBtn = e.target.closest('.btn-retry-inline');
             if (healBtn) {
