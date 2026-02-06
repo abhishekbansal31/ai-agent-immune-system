@@ -870,7 +870,7 @@ HTML_TEMPLATE = """
     <div class="container">
         <div class="header">
             <h1>🛡️ AI Agent Immune System</h1>
-            <p class="subtitle">Monitoring and healing for <strong>AI agents</strong> (e.g. powered by GPT-5, Claude Sonnet, Gemini) using tools via <strong>MCP servers</strong> (filesystem, GitHub, Slack, Postgres, etc.). The immune system detects, quarantines, and heals them.</p>
+            <p class="subtitle">Monitoring and Healing System for <strong>AI agents</strong> (e.g. powered by GPT-5, Claude Sonnet, Gemini) using tools via <strong>MCP servers</strong> (filesystem, GitHub, Slack, Postgres, etc.). The immune system detects, quarantines, and heals them.</p>
         </div>
         
         <div class="stats-grid">
@@ -1088,11 +1088,7 @@ HTML_TEMPLATE = """
             
             const runtimeSec = (stats.runtime != null) ? Math.floor(stats.runtime) : 0;
             document.getElementById('stat-runtime').textContent = runtimeSec + 's';
-            
-            const status = document.querySelector('.header .subtitle');
-            if (stats.baselines_learned > 0) {
-                status.textContent = `AI agents: real-time monitoring and autonomous healing • ${stats.baselines_learned} baselines learned`;
-            }
+            // Subtitle is never overwritten; it stays as the original description.
         }
         
         function updateAgents(agents, healingInProgress) {

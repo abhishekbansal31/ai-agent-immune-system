@@ -23,7 +23,7 @@ TICK_INTERVAL_SECONDS = 1.0
 
 # Severe infections (severity >= this) require UI approval before healing
 # Lower value = more infections show as severe in the UI (severity scale 0-10)
-SEVERITY_REQUIRING_APPROVAL = 6.0
+SEVERITY_REQUIRING_APPROVAL = 7.0
 
 # Delay between healing steps so UI can show "healing in progress"
 HEALING_STEP_DELAY_SECONDS = 2.5
