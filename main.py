@@ -13,14 +13,19 @@ import sys
 from agents import create_agent_pool
 from orchestrator import ImmuneSystemOrchestrator
 from web_dashboard import WebDashboard
+from logging_config import setup_logging, get_logger
+
+logger = get_logger(__name__)
 
 
 async def main():
     """Main entry point with web dashboard"""
-    print("Starting AI Agent Immune System...", flush=True)
+    setup_logging()
+
+    logger.info("Starting AI Agent Immune System")
     # Create pool of 15 diverse agents
     agents = create_agent_pool(15)
-    print(f"Created {len(agents)} agents", flush=True)
+    logger.info("Created %d agents", len(agents))
     
     # Create immune system orchestrator
     orchestrator = ImmuneSystemOrchestrator(agents)
@@ -38,5 +43,5 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        print("\n\nShutdown requested by user", flush=True)
+        logger.info("Shutdown requested by user")
         sys.exit(0)

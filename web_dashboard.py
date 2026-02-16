@@ -6,6 +6,9 @@ from flask import Flask, jsonify, render_template_string, request
 from flask_cors import CORS
 import threading
 import time
+from logging_config import get_logger
+
+logger = get_logger("web_dashboard")
 
 
 class WebDashboard:
@@ -180,8 +183,7 @@ class WebDashboard:
     def start(self):
         """Start the web server in a background thread"""
         def run():
-            print(f"\n🌐 Web Dashboard: http://localhost:{self.port}", flush=True)
-            print(f"   Open your browser and visit the URL above\n", flush=True)
+            logger.info("Web Dashboard: http://localhost:%d", self.port)
             self.app.run(host='0.0.0.0', port=self.port, debug=False, use_reloader=False)
         
         thread = threading.Thread(target=run, daemon=True)
