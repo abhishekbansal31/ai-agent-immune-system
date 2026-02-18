@@ -27,7 +27,8 @@ The web dashboard provides a single pane of glass: agent status (with model and 
 
 ### Added capabilities
 
-- **InfluxDB-backed persistence (optional):** When `INFLUXDB_*` environment variables are set, telemetry, baselines, approval workflow state (pending/rejected), immune memory, and the healing action log are stored in InfluxDB. Each run is isolated by a `run_id`. If InfluxDB is not configured, the system falls back to in-memory state.
+- **Server API store (optional):** When `SERVER_API_BASE_URL` is set, the client uses **ApiStore** and talks to a server REST API for all persistence (client-deployed architecture). No direct InfluxDB on the client. See `docs/DOCS.md` (§2, §5, §6).
+- **InfluxDB-backed persistence (optional):** When `INFLUXDB_*` environment variables are set (and server API is not), telemetry, baselines, approval workflow state (pending/rejected), immune memory, and the healing action log are stored in InfluxDB. Each run is isolated by a `run_id`. If neither server API nor InfluxDB is configured, the system falls back to in-memory state.
 - **OpenTelemetry (OTEL) metrics:** When `OTEL_EXPORTER_OTLP_ENDPOINT` is set, the app exports metrics (counters, histograms) for agent executions, infections, approvals, and quarantine events to an OTLP HTTP endpoint (e.g. an OpenTelemetry Collector).
 - **Structured logging:** Configurable via `LOG_LEVEL` and `LOG_FORMAT` (human-readable colored console or JSON for log aggregation). See `logging_config.py`.
 - **Observability stack:** The `observability/` directory provides a Docker Compose stack (InfluxDB + OTEL Collector) for local demos and development.
@@ -127,10 +128,10 @@ This view shows how data and control flow through the system (data flow diagram)
 │                                        ▼ vitals (OTEL)                            │
 │  ┌──────────────────────────────────────────────────────────────────────────┐   │
 │  │ TELEMETRY + BASELINE                                                       │   │
-│  │ • TelemetryCollector: stores recent vitals (OTEL) per agent; when        │   │
-│  │   InfluxDB is configured, writes/reads from InfluxStore                   │   │
-│  │ • BaselineLearner: after a minimum sample count (e.g. 15), computes       │   │
-│  │   mean/std per metric per agent (no baseline → no infection detection)      │   │
+│  │ • TelemetryCollector: stores recent vitals (OTEL) per agent; when a      │   │
+│  │   store is configured (InfluxStore or ApiStore), writes/reads from store  │   │
+│  │ • BaselineLearner: after a minimum sample count (e.g. 15), computes      │   │
+│  │   mean/std per metric per agent (no baseline → no infection detection)   │   │
 │  └──────────────────────────────────────────────────────────────────────────┘   │
 │                                        │                                         │
 │                                        ▼                                         │
@@ -172,8 +173,9 @@ This view shows how data and control flow through the system (data flow diagram)
 │  │ • Writes: Approve/Reject (single or all), Heal now (single or all)         │   │
 │  │ • Approve/Heal now → schedule heal_agent on orchestrator’s event loop     │   │
 │  └──────────────────────────────────────────────────────────────────────────┘   │
-│  Optional: InfluxDB stores vitals, baselines, workflow state, action log.       │
-│  Optional: OTEL metrics exported to OTLP endpoint when configured.              │
+│  Persistence: store (InfluxStore, ApiStore, or in-memory) for vitals,           │
+│  baselines, workflow state, action log. ApiStore = server REST API (no direct  │
+│  DB on client). Optional: OTEL metrics to OTLP when configured. See docs/DOCS.md §2.  │
 │                                                                                  │
 └─────────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -195,7 +197,7 @@ This view shows how data and control flow through the system (data flow diagram)
 
 - **Telemetry:** Agent loops push vitals (OTEL) into `TelemetryCollector` (per-agent time-series). Baseline learner consumes these to compute mean/std per metric per agent. Sentinel and healer read from telemetry and baseline for detection and diagnosis.
 - **Quarantine:** `QuarantineController` holds the set of quarantined agent IDs. Agent loops check it to skip execution; sentinel skips quarantined agents for re-detection; healing releases from quarantine on success.
-- **Pending / rejected state:** When in-memory, severe infections are stored in `_pending_approvals` / `_rejected_approvals`; when InfluxDB is configured, in `InfluxStore`. Dashboard reads this for the “Pending approvals” list. On Approve, the entry is removed and `heal_agent` is scheduled. On Reject, the entry is moved to `_rejected_approvals` and the agent stays quarantined. “Heal now” (single or all) removes from `_rejected_approvals` and schedules `heal_agent` for each. Sentinel does not re-add an agent to pending if the latest approval state is "rejected".
+- **Pending / rejected state:** When in-memory, severe infections are stored in `_pending_approvals` / `_rejected_approvals`; when a store is configured (InfluxStore or ApiStore), in the store. Dashboard reads this for the “Pending approvals” list. On Approve, the entry is removed and `heal_agent` is scheduled. On Reject, the entry is moved to `_rejected_approvals` and the agent stays quarantined. “Heal now” (single or all) removes from `_rejected_approvals` and schedules `heal_agent` for each. Sentinel does not re-add an agent to pending if the latest approval state is "rejected".
 - **Healing:** `heal_agent(agent_id, infection, trigger)` is async: it diagnoses, loads the policy for that diagnosis type, filters by immune memory (skip previously failed actions for this agent+diagnosis), applies the next action, records the result in immune memory, and either releases the agent (success) or escalates to the next action (failure). All of this runs on the main asyncio loop; the dashboard only triggers it.
 
 ### Timing and alignment
@@ -205,7 +207,7 @@ This view shows how data and control flow through the system (data flow diagram)
 
 ### Thread safety
 
-- When using in-memory state, `_pending_approvals`, `_rejected_approvals`, and the healing action log are accessed from both the asyncio thread and the Flask thread; access is protected by a shared lock. When InfluxDB is configured, workflow state is read/written via the store.
+- When using in-memory state, `_pending_approvals`, `_rejected_approvals`, and the healing action log are accessed from both the asyncio thread and the Flask thread; access is protected by a shared lock. When a store is configured (InfluxStore or ApiStore), workflow state is read/written via the store.
 
 ---
 
@@ -223,6 +225,7 @@ This view shows how data and control flow through the system (data flow diagram)
 | Quarantine      | `quarantine.py`   | Tracks quarantined agent IDs; quarantine/release used by orchestrator and agent loop. |
 | Chaos           | `chaos.py`        | Injects token/tool/latency/retry-style failures for demos. |
 | InfluxStore     | `influx_store.py` | Optional InfluxDB-backed storage for vitals, baselines, infection/quarantine/approval events, healing memory, and action log; run-scoped by `run_id`. |
+| ApiStore        | `api_store.py`    | Optional **server API**–backed store: same interface as InfluxStore but calls a remote REST API (used when immune system runs on client and server fronts InfluxDB). Set `SERVER_API_BASE_URL` to enable. |
 | Logging         | `logging_config.py` | Structured logging: colored console or JSON format; configurable via `LOG_LEVEL` and `LOG_FORMAT`. |
 | Orchestrator    | `orchestrator.py` | Holds all of the above; runs agent loops, sentinel loop, and chaos schedule; implements approve/reject/heal-now and approve-all/reject-all/heal-all; exposes state and actions for the dashboard; uses store for workflow state when configured. |
 | Web dashboard   | `web_dashboard.py`| Flask app; serves UI and REST endpoints for status, agents, pending/rejected, healing log, stats; triggers healing on the orchestrator’s event loop. |
@@ -267,13 +270,14 @@ RUN_DURATION_SECONDS=120 \
 python demo.py
 ```
 
-Use `RUN_DURATION_SECONDS=120` (or similar) for a short demo; `demo.py` defaults to 600s if unset. For a full run use `python main.py` (15 agents, default `RUN_DURATION_SECONDS=1200`). If InfluxDB or OTEL env vars are omitted, the app falls back to in-memory mode and skips metric export. See `docs/OPERATIONS.md` for detailed runbooks and health checks.
+Use `RUN_DURATION_SECONDS=120` (or similar) for a short demo; `demo.py` defaults to 600s if unset. For a full run use `python main.py` (15 agents, default `RUN_DURATION_SECONDS=1200`). If InfluxDB or OTEL env vars are omitted, the app falls back to in-memory mode and skips metric export. See `docs/DOCS.md` §13 for detailed runbooks and health checks.
 
 ### Environment variables
 
 | Variable | Purpose |
 |----------|---------|
-| `INFLUXDB_URL`, `INFLUXDB_TOKEN`, `INFLUXDB_ORG`, `INFLUXDB_BUCKET` | Enable InfluxDB-backed persistence for telemetry, baselines, workflow, and action log. Omit for in-memory mode. |
+| `SERVER_API_BASE_URL` | When set, use **server API** store (client-deployed): client calls this base URL for all persistence. Optional: `SERVER_API_KEY`, `SERVER_RUN_ID`. See `docs/DOCS.md` §5. |
+| `INFLUXDB_URL`, `INFLUXDB_TOKEN`, `INFLUXDB_ORG`, `INFLUXDB_BUCKET` | Enable direct InfluxDB-backed persistence (used if `SERVER_API_BASE_URL` is not set). Omit for in-memory mode. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP HTTP endpoint for metrics (e.g. `http://localhost:4318`). If set, app exports OTEL metrics. |
 | `OTEL_SERVICE_NAME` | Service name for OTEL resource (default: `ai-agent-immune-system`). |
 | `OTEL_METRIC_EXPORT_INTERVAL_MS` | Metric export interval in ms (default: `5000`). |
@@ -309,16 +313,14 @@ Sections are collapsible. All data is read from the orchestrator and refreshed e
 ## Requirements
 
 - Python 3.8+
-- Dependencies (see `requirements.txt`): `flask`, `flask-cors` (dashboard); `influxdb-client` (optional, for InfluxDB persistence); `opentelemetry-api`, `opentelemetry-sdk`, `opentelemetry-exporter-otlp` (optional, for metrics export).
+- Dependencies (see `requirements.txt`): `flask`, `flask-cors` (dashboard); `requests` (for ApiStore when using server API); `influxdb-client` (optional, for direct InfluxDB persistence); `opentelemetry-api`, `opentelemetry-sdk`, `opentelemetry-exporter-otlp` (optional, for metrics export).
 - Optional: Docker and Docker Compose to run the observability stack in `observability/`.
 
 ---
 
 ## Further documentation
 
-- **`docs/OPERATIONS.md`** — Runbooks, environment variables, health checks, and troubleshooting for running with InfluxDB and OTEL.
-- **`docs/ARCHITECTURE.md`** — High-level and low-level design, data flow, and InfluxStore usage.
-- **`docs/PRODUCTION_ARCHITECTURE.md`** — Production-grade deployment and scaling considerations.
+- **`docs/DOCS.md`** — **Single reference** for everything: executive summary, architecture (client-deployed), internal design (HLD/LLD, Mermaid), healing & deviation (§4), server REST API (§6), client config (§5), InfluxDB schema, AppDynamics, alternative deployment, migration, security/SLOs, runtime notes, **operations runbook** (§13: quick start, env vars, health checks, known issues, incident checklist), and one-page summary. Update this doc when anything changes.
 - **`presentation.py`** — Optional: generates a PowerPoint deck (requires `python-pptx`); not part of the runtime.
 
 ---

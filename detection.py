@@ -1,5 +1,12 @@
 """
-Sentinel - Anomaly detection system
+Sentinel - Anomaly detection system.
+
+Deviation is calculated HERE: detect_infection(recent_vitals, baseline) compares
+recent vitals to the agent's baseline (mean/stddev per metric) and produces
+per-metric deviations and an overall severity (0-10). Both recent_vitals and
+baseline can be backed by InfluxDB (or server API store): recent from
+get_recent_agent_vitals(), baseline from get_baseline_profile() (baseline is
+learned from older metric data in the store). See docs/DOCS.md §4.
 """
 from dataclasses import dataclass
 from typing import List, Optional
@@ -34,14 +41,16 @@ class Sentinel:
     
     def detect_infection(self, recent_vitals: List, baseline) -> Optional[InfectionReport]:
         """
-        Detect if agent is infected by comparing recent behavior to baseline
-        
+        Detect if agent is infected by comparing recent behavior to baseline.
+        This is where deviation is calculated (recent vs baseline; baseline
+        is derived from older metric data, e.g. in InfluxDB).
+
         Args:
-            recent_vitals: Recent telemetry data
-            baseline: BaselineProfile for this agent
-        
+            recent_vitals: Recent telemetry data (e.g. from store.get_recent_agent_vitals)
+            baseline: BaselineProfile for this agent (e.g. from store.get_baseline_profile)
+
         Returns:
-            InfectionReport if infection detected, None otherwise
+            InfectionReport if infection detected (with severity 0-10), None otherwise.
         """
         if not recent_vitals or not baseline:
             return None

@@ -15,6 +15,7 @@ from agents import create_agent_pool
 from orchestrator import ImmuneSystemOrchestrator
 from web_dashboard import WebDashboard
 from influx_store import InfluxStore
+from api_store import ApiStore
 from logging_config import setup_logging, get_logger
 from opentelemetry import metrics
 from opentelemetry.sdk.metrics import MeterProvider
@@ -50,13 +51,21 @@ async def main():
     configure_otel()
 
     logger.info("Starting AI Agent Immune System")
+    server_api_base = os.getenv("SERVER_API_BASE_URL")
     influx_url = os.getenv("INFLUXDB_URL")
     influx_token = os.getenv("INFLUXDB_TOKEN")
     influx_org = os.getenv("INFLUXDB_ORG")
     influx_bucket = os.getenv("INFLUXDB_BUCKET")
 
     store = None
-    if influx_url and influx_token and influx_org and influx_bucket:
+    if server_api_base:
+        store = ApiStore(
+            base_url=server_api_base,
+            api_key=os.getenv("SERVER_API_KEY"),
+            run_id=os.getenv("SERVER_RUN_ID"),
+        )
+        logger.info("Server API store enabled (base_url=%s)", server_api_base)
+    elif influx_url and influx_token and influx_org and influx_bucket:
         store = InfluxStore(
             url=influx_url,
             token=influx_token,
@@ -65,7 +74,7 @@ async def main():
         )
         logger.info("InfluxDB enabled (bucket=%s)", influx_bucket)
     else:
-        logger.warning("InfluxDB env vars not fully configured. Falling back to in-memory mode.")
+        logger.warning("Neither SERVER_API_BASE_URL nor InfluxDB env vars set. Falling back to in-memory mode.")
 
     # Create pool of 15 diverse agents
     agents = create_agent_pool(15)
