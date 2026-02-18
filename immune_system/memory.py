@@ -4,8 +4,8 @@ Immune Memory - Learning system that remembers which healing actions work
 from dataclasses import dataclass
 from typing import List, Set, Dict
 from collections import defaultdict
-from diagnosis import DiagnosisType
-from healing import HealingAction
+from .diagnosis import DiagnosisType
+from .healing import HealingAction
 import time
 
 

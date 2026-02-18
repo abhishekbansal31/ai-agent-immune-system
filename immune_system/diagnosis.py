@@ -3,7 +3,7 @@ Diagnostician - Root cause analysis of infections
 """
 from dataclasses import dataclass
 from enum import Enum
-from detection import AnomalyType, InfectionReport
+from .detection import AnomalyType, InfectionReport
 
 
 class DiagnosisType(Enum):

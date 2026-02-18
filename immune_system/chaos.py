@@ -3,7 +3,7 @@ Chaos Engineering - Controlled failure injection for demo
 """
 import random
 from typing import List
-from agents import BaseAgent
+from .agents import BaseAgent
 
 
 class ChaosInjector:

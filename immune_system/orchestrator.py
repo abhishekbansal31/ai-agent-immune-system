@@ -7,17 +7,16 @@ from typing import List, Dict, Any, Optional, Tuple
 import time
 from opentelemetry import metrics
 
-from agents import BaseAgent
-from detection import InfectionReport, AnomalyType
-from telemetry import TelemetryCollector
-from baseline import BaselineLearner
-from detection import Sentinel
-from diagnosis import Diagnostician
-from healing import Healer
-from memory import ImmuneMemory
-from quarantine import QuarantineController
-from chaos import ChaosInjector
-from logging_config import get_logger
+from .agents import BaseAgent
+from .detection import InfectionReport, AnomalyType, Sentinel
+from .telemetry import TelemetryCollector
+from .baseline import BaselineLearner
+from .diagnosis import Diagnostician
+from .healing import Healer
+from .memory import ImmuneMemory
+from .quarantine import QuarantineController
+from .chaos import ChaosInjector
+from .logging_config import get_logger
 
 logger = get_logger("orchestrator")
 

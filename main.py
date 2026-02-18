@@ -11,12 +11,12 @@ A system that treats AI agents as living entities with an immune system that:
 import asyncio
 import os
 import sys
-from agents import create_agent_pool
-from orchestrator import ImmuneSystemOrchestrator
-from web_dashboard import WebDashboard
-from influx_store import InfluxStore
-from api_store import ApiStore
-from logging_config import setup_logging, get_logger
+from immune_system.agents import create_agent_pool
+from immune_system.orchestrator import ImmuneSystemOrchestrator
+from immune_system.web_dashboard import WebDashboard
+from immune_system.influx_store import InfluxStore
+from immune_system.api_store import ApiStore
+from immune_system.logging_config import setup_logging, get_logger
 from opentelemetry import metrics
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader

@@ -13,7 +13,7 @@ This document is the **single reference** for the AI Agent Immune System: archit
 | **Optional** | Visibility | AppDynamics Controller for agent OTEL and/or immune-system events |
 
 - **Self-healing:** When **severity** (0–10) is **below** `SEVERITY_REQUIRING_APPROVAL` (default 7.0), the system **auto-heals**. Above → **human-in-the-loop** (pending approval).
-- **Deviation** is calculated in **one place:** **Sentinel** (`detection.py`), in `detect_infection(recent_vitals, baseline)`. Older metric data in InfluxDB is used to build the **baseline** and to supply **recent** vitals for that comparison.
+- **Deviation** is calculated in **one place:** **Sentinel** (`immune_system/detection.py`), in `detect_infection(recent_vitals, baseline)`. Older metric data in InfluxDB is used to build the **baseline** and to supply **recent** vitals for that comparison.
 
 **Alternative deployment:** Server-side — immune system as separate services (telemetry, baseline, sentinel, healer) on Kubernetes/OpenShift with a central DB. This doc focuses on the **recommended** client-deployed model.
 
@@ -102,18 +102,18 @@ Entry point: `main.py` or `demo.py` with `SERVER_API_BASE_URL` (and optional `SE
 | Component | File | Notes |
 |-----------|------|--------|
 | Entry point | `main.py`, `demo.py` | Store selection (ApiStore vs InfluxStore vs in-memory), orchestrator + dashboard. |
-| Orchestrator | `orchestrator.py` | Agent loop, sentinel loop, approval/heal-now, store usage. |
-| Agents | `agents.py` | BaseAgent, AgentState, vitals emission, infection simulation. |
-| Telemetry | `telemetry.py` | TelemetryCollector; record, get_recent, get_all, get_latest. |
-| Baseline | `baseline.py` | BaselineLearner, BaselineProfile; learn_baseline, get_baseline. |
-| Sentinel | `detection.py` | **Deviation and severity** in detect_infection(recent_vitals, baseline). |
-| Diagnosis | `diagnosis.py` | Diagnostician; anomaly pattern → diagnosis type. |
-| Healing | `healing.py` | Healer, HEALING_POLICIES, healing actions. |
-| Memory | `memory.py` | ImmuneMemory; failed actions, pattern summary. |
-| Quarantine | `quarantine.py` | QuarantineController; quarantine/release set. |
-| Dashboard | `web_dashboard.py` | Flask REST + UI; approve/reject/heal-now. |
-| Store (direct DB) | `influx_store.py` | InfluxStore when using InfluxDB directly. |
-| Store (API) | `api_store.py` | ApiStore when using server REST API. |
+| Orchestrator | `immune_system/orchestrator.py` | Agent loop, sentinel loop, approval/heal-now, store usage. |
+| Agents | `immune_system/agents.py` | BaseAgent, AgentState, vitals emission, infection simulation. |
+| Telemetry | `immune_system/telemetry.py` | TelemetryCollector; record, get_recent, get_all, get_latest. |
+| Baseline | `immune_system/baseline.py` | BaselineLearner, BaselineProfile; learn_baseline, get_baseline. |
+| Sentinel | `immune_system/detection.py` | **Deviation and severity** in detect_infection(recent_vitals, baseline). |
+| Diagnosis | `immune_system/diagnosis.py` | Diagnostician; anomaly pattern → diagnosis type. |
+| Healing | `immune_system/healing.py` | Healer, HEALING_POLICIES, healing actions. |
+| Memory | `immune_system/memory.py` | ImmuneMemory; failed actions, pattern summary. |
+| Quarantine | `immune_system/quarantine.py` | QuarantineController; quarantine/release set. |
+| Dashboard | `immune_system/web_dashboard.py` | Flask REST + UI; approve/reject/heal-now. |
+| Store (direct DB) | `immune_system/influx_store.py` | InfluxStore when using InfluxDB directly. |
+| Store (API) | `immune_system/api_store.py` | ApiStore when using server REST API. |
 
 ---
 
@@ -229,19 +229,21 @@ sequenceDiagram
 
 ### 3.4 Component mapping (file-level)
 
-- `main.py` — App entrypoint, OTel configuration, store wiring (InfluxStore/ApiStore/in-memory), run duration control.
-- `demo.py` — Demo entrypoint, dashboard startup with event loop reference, configurable duration.
-- `orchestrator.py` — Core event loops: agent execution, sentinel detection, healing, approval/rejection workflow.
-- `agents.py` — Simulated agents and infection modes; emits vitals each execution.
-- `telemetry.py` — Telemetry abstraction and OTel metric instruments.
-- `baseline.py` — Baseline profile learning and retrieval.
-- `detection.py` — Statistical anomaly detection and severity scoring (deviation calculated here).
-- `diagnosis.py` — Rule-based diagnosis from anomaly patterns.
-- `healing.py` — Healing policies and action execution/validation.
-- `memory.py` — Immune memory (failed actions/pattern summaries), backed by store queries.
-- `web_dashboard.py` — REST API + UI rendering; user actions for approval/rejection/heal-now.
-- `influx_store.py` — InfluxDB persistence/query layer (used when `INFLUXDB_*` is set).
-- `api_store.py` — Server API–backed store: same interface as InfluxStore, calls remote REST API (used when `SERVER_API_BASE_URL` is set). See §6 for API contract.
+- `main.py`, `demo.py` — Entry points at repo root; import from `immune_system` package.
+- `immune_system/` — Python package containing all core modules.
+- `immune_system/orchestrator.py` — Core event loops: agent execution, sentinel detection, healing, approval/rejection workflow.
+- `immune_system/agents.py` — Simulated agents and infection modes; emits vitals each execution.
+- `immune_system/telemetry.py` — Telemetry abstraction and OTel metric instruments.
+- `immune_system/baseline.py` — Baseline profile learning and retrieval.
+- `immune_system/detection.py` — Statistical anomaly detection and severity scoring (deviation calculated here).
+- `immune_system/diagnosis.py` — Rule-based diagnosis from anomaly patterns.
+- `immune_system/healing.py` — Healing policies and action execution/validation.
+- `immune_system/memory.py` — Immune memory (failed actions/pattern summaries), backed by store queries.
+- `immune_system/web_dashboard.py` — REST API + UI rendering; user actions for approval/rejection/heal-now.
+- `immune_system/influx_store.py` — InfluxDB persistence/query layer (used when `INFLUXDB_*` is set).
+- `immune_system/api_store.py` — Server API–backed store (used when `SERVER_API_BASE_URL` is set). See §6 for API contract.
+- `immune_system/logging_config.py` — Logging setup (JSON or colored console).
+- `immune_system/quarantine.py`, `immune_system/chaos.py` — Quarantine controller and chaos injector.
 - `observability/docker-compose.yml` — Local InfluxDB and OTel Collector stack.
 - `observability/otel-collector-config.yaml` — OTLP receiver + debug exporter pipeline.
 
@@ -251,7 +253,7 @@ sequenceDiagram
 
 ### 4.1 Where deviation is calculated
 
-**Only in:** `detection.py` → **`Sentinel.detect_infection(recent_vitals, baseline)`**
+**Only in:** `immune_system/detection.py` → **`Sentinel.detect_infection(recent_vitals, baseline)`**
 
 - **Inputs:** `recent_vitals` (e.g. last 10s from store/InfluxDB), `baseline` (mean/stddev per metric from store/InfluxDB). Baseline is learned from **older metric data** in InfluxDB.
 - **Logic:** Averages of recent latency, tokens, tools; per-metric deviation = |avg − baseline_mean| / baseline_stddev; anomaly if deviation > `threshold_stddev` (default 2.5); severity = min(10, 2 + max_dev * 0.45).
@@ -266,7 +268,7 @@ Orchestrator gets recent vitals and baseline from the store (InfluxDB or API), c
 | **< SEVERITY_REQUIRING_APPROVAL** (default **7.0**) | **Self-healing:** Orchestrator schedules `heal_agent()`; healer runs policy ladder + immune memory. |
 | **≥ 7.0** | **HITL:** Quarantine + add to pending approvals; healing only after Approve (or Heal now for rejected). |
 
-- **Config:** `orchestrator.py`: `SEVERITY_REQUIRING_APPROVAL = 7.0`. Detection sensitivity: `Sentinel(threshold_stddev=2.5)` in `detection.py`.
+- **Config:** `immune_system/orchestrator.py`: `SEVERITY_REQUIRING_APPROVAL = 7.0`. Detection sensitivity: `Sentinel(threshold_stddev=2.5)` in `immune_system/detection.py`.
 
 ### 4.3 Agent state and healing actions
 
@@ -640,7 +642,7 @@ When system behavior looks wrong, run this checklist in order:
 
 Syntax check core files:
 ```bash
-python3 -m py_compile main.py demo.py orchestrator.py telemetry.py baseline.py memory.py web_dashboard.py influx_store.py api_store.py
+python3 -m py_compile main.py demo.py immune_system/orchestrator.py immune_system/telemetry.py immune_system/baseline.py immune_system/memory.py immune_system/web_dashboard.py immune_system/influx_store.py immune_system/api_store.py
 ```
 
 Find process on dashboard port:
@@ -653,7 +655,7 @@ lsof -i :8090
 ## 14. One-Page Summary
 
 - **What:** Control plane for AI agents: monitor → detect (deviation in Sentinel) → quarantine → heal (self-heal or HITL by severity).
-- **Where deviation is calculated:** **Sentinel** (`detection.py`, `detect_infection()`). Baseline and recent vitals from store (InfluxDB or server API).
+- **Where deviation is calculated:** **Sentinel** (`immune_system/detection.py`, `detect_infection()`). Baseline and recent vitals from store (InfluxDB or server API).
 - **Recommended production:** **Client-deployed** — immune system on client, server = REST API + InfluxDB, client uses ApiStore.
 - **Next steps:** Implement server API (contract in §6) + InfluxDB; run client with `SERVER_API_BASE_URL`.
 

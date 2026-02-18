@@ -215,20 +215,20 @@ This view shows how data and control flow through the system (data flow diagram)
 
 | Component        | File              | Responsibility |
 |-----------------|-------------------|----------------|
-| Agent runtime   | `agents.py`       | Multiple agent types (Research, Data, Analytics, Coordinator); each executes on a tick and returns vitals (OTEL); supports infection simulation and model/MCP-style labels for the UI. |
-| Telemetry       | `telemetry.py`    | Stores vitals (OTEL) per agent; when InfluxDB is configured, uses InfluxStore; otherwise in-memory; provides recent window and counts for baseline and sentinel; emits OTEL metrics. |
-| Baseline        | `baseline.py`     | Learns mean and standard deviation per metric per agent after a minimum sample count; can persist/load baselines via InfluxStore when configured. |
-| Sentinel        | `detection.py`    | Compares recent vitals (OTEL) to baseline; emits infection report with anomaly types and severity (0–10). |
-| Diagnostician   | `diagnosis.py`    | Maps anomaly patterns to diagnosis types (e.g. prompt drift, infinite loop, tool instability). |
-| Healer          | `healing.py`      | Holds healing policies (diagnosis → ordered actions); applies actions; consults immune memory to skip failed actions. |
-| Immune memory   | `memory.py`       | Records per-agent, per-diagnosis healing outcomes; exposes failed actions and success-rate summaries; can persist via InfluxStore when configured. |
-| Quarantine      | `quarantine.py`   | Tracks quarantined agent IDs; quarantine/release used by orchestrator and agent loop. |
-| Chaos           | `chaos.py`        | Injects token/tool/latency/retry-style failures for demos. |
-| InfluxStore     | `influx_store.py` | Optional InfluxDB-backed storage for vitals, baselines, infection/quarantine/approval events, healing memory, and action log; run-scoped by `run_id`. |
-| ApiStore        | `api_store.py`    | Optional **server API**–backed store: same interface as InfluxStore but calls a remote REST API (used when immune system runs on client and server fronts InfluxDB). Set `SERVER_API_BASE_URL` to enable. |
-| Logging         | `logging_config.py` | Structured logging: colored console or JSON format; configurable via `LOG_LEVEL` and `LOG_FORMAT`. |
-| Orchestrator    | `orchestrator.py` | Holds all of the above; runs agent loops, sentinel loop, and chaos schedule; implements approve/reject/heal-now and approve-all/reject-all/heal-all; exposes state and actions for the dashboard; uses store for workflow state when configured. |
-| Web dashboard   | `web_dashboard.py`| Flask app; serves UI and REST endpoints for status, agents, pending/rejected, healing log, stats; triggers healing on the orchestrator’s event loop. |
+| Agent runtime   | `immune_system/agents.py` | Multiple agent types (Research, Data, Analytics, Coordinator); each executes on a tick and returns vitals (OTEL); supports infection simulation and model/MCP-style labels for the UI. |
+| Telemetry       | `immune_system/telemetry.py` | Stores vitals (OTEL) per agent; when InfluxDB is configured, uses InfluxStore; otherwise in-memory; provides recent window and counts for baseline and sentinel; emits OTEL metrics. |
+| Baseline        | `immune_system/baseline.py` | Learns mean and standard deviation per metric per agent after a minimum sample count; can persist/load baselines via InfluxStore when configured. |
+| Sentinel        | `immune_system/detection.py` | Compares recent vitals (OTEL) to baseline; emits infection report with anomaly types and severity (0–10). |
+| Diagnostician   | `immune_system/diagnosis.py` | Maps anomaly patterns to diagnosis types (e.g. prompt drift, infinite loop, tool instability). |
+| Healer          | `immune_system/healing.py` | Holds healing policies (diagnosis → ordered actions); applies actions; consults immune memory to skip failed actions. |
+| Immune memory   | `immune_system/memory.py` | Records per-agent, per-diagnosis healing outcomes; exposes failed actions and success-rate summaries; can persist via InfluxStore when configured. |
+| Quarantine      | `immune_system/quarantine.py` | Tracks quarantined agent IDs; quarantine/release used by orchestrator and agent loop. |
+| Chaos           | `immune_system/chaos.py` | Injects token/tool/latency/retry-style failures for demos. |
+| InfluxStore     | `immune_system/influx_store.py` | Optional InfluxDB-backed storage for vitals, baselines, infection/quarantine/approval events, healing memory, and action log; run-scoped by `run_id`. |
+| ApiStore        | `immune_system/api_store.py` | Optional **server API**–backed store: same interface as InfluxStore but calls a remote REST API (used when immune system runs on client and server fronts InfluxDB). Set `SERVER_API_BASE_URL` to enable. |
+| Logging         | `immune_system/logging_config.py` | Structured logging: colored console or JSON format; configurable via `LOG_LEVEL` and `LOG_FORMAT`. |
+| Orchestrator    | `immune_system/orchestrator.py` | Holds all of the above; runs agent loops, sentinel loop, and chaos schedule; implements approve/reject/heal-now and approve-all/reject-all/heal-all; exposes state and actions for the dashboard; uses store for workflow state when configured. |
+| Web dashboard   | `immune_system/web_dashboard.py` | Flask app; serves UI and REST endpoints for status, agents, pending/rejected, healing log, stats; triggers healing on the orchestrator’s event loop. |
 | Entry point     | `main.py`, `demo.py` | `main.py`: full run (15 agents, default 1200s); `demo.py`: shorter run (10 agents, default 600s). Both support InfluxDB/OTEL and configure OTEL metrics when env vars are set. |
 
 ---

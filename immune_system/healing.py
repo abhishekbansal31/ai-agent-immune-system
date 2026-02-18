@@ -4,7 +4,7 @@ Healer - Recovery actions and healing policies
 from dataclasses import dataclass
 from enum import Enum
 from typing import Optional, Set
-from diagnosis import DiagnosisType
+from .diagnosis import DiagnosisType
 import asyncio
 
 

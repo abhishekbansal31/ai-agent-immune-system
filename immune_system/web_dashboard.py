@@ -6,7 +6,7 @@ from flask import Flask, jsonify, render_template_string, request
 from flask_cors import CORS
 import threading
 import time
-from logging_config import get_logger
+from .logging_config import get_logger
 
 logger = get_logger("web_dashboard")
 

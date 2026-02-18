@@ -136,7 +136,7 @@ def get_logger(name: str) -> logging.Logger:
     Return a named logger.
 
     Usage:
-        from logging_config import get_logger
+        from immune_system.logging_config import get_logger
         logger = get_logger(__name__)
         logger.info("Agent %s started", agent_id)
     """
