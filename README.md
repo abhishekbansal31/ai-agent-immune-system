@@ -75,6 +75,7 @@ This pattern applies beyond Cisco AI PODs: any deployment (on-prem, hybrid, or c
 High-level view: agents emit vitals into the immune system, which detects, diagnoses, contains, and recovers, with learning over time.
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#e8eaf6', 'primaryTextColor': '#1a1a1a', 'primaryBorderColor': '#3949ab', 'lineColor': '#37474f', 'secondaryColor': '#f3e5f5', 'tertiaryColor': '#e8f5e9', 'edgeLabelBackground': '#ffffff', 'clusterBkg': '#f5f5f5', 'clusterBorder': '#90a4ae'}}}%%
 flowchart TB
     subgraph sources ["AGENT SOURCES"]
         direction LR
@@ -96,6 +97,7 @@ flowchart TB
 This view shows the main components and how they connect (logical architecture). The Orchestrator coordinates the entire pipeline.
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#e8eaf6', 'primaryTextColor': '#1a1a1a', 'primaryBorderColor': '#3949ab', 'lineColor': '#37474f', 'secondaryColor': '#f3e5f5', 'tertiaryColor': '#e8f5e9', 'edgeLabelBackground': '#ffffff'}}}%%
 flowchart TD
     Agents[Agent sources] -->|vitals| TC[Telemetry]
     TC --> BL[Baseline]
@@ -115,6 +117,7 @@ flowchart TD
 This view shows how data and control flow through the system (data flow diagram).
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#e8eaf6', 'primaryTextColor': '#1a1a1a', 'primaryBorderColor': '#3949ab', 'lineColor': '#37474f', 'secondaryColor': '#f3e5f5', 'tertiaryColor': '#e8f5e9', 'edgeLabelBackground': '#ffffff', 'clusterBkg': '#f5f5f5', 'clusterBorder': '#90a4ae'}}}%%
 flowchart TB
     subgraph sources ["AGENT SOURCES"]
         direction LR
@@ -158,13 +161,13 @@ flowchart TB
 
     D -->|user action| SEN
 
-    style sources fill:#e1f5fe,stroke:#0288d1,color:#1a1a1a
-    style TelBase fill:#f3e5f5,stroke:#7b1fa2,color:#1a1a1a
-    style SEN fill:#fff3e0,stroke:#ef6c00,color:#1a1a1a
-    style Severe fill:#ffebee,stroke:#c62828,color:#1a1a1a
-    style Mild fill:#e8f5e9,stroke:#2e7d32,color:#1a1a1a
-    style HealMem fill:#e8f5e9,stroke:#2e7d32,color:#1a1a1a
-    style Dash fill:#fce4ec,stroke:#ad1457,color:#1a1a1a
+    style sources fill:#e1f5fe,stroke:#0277bd,color:#1a1a1a
+    style TelBase fill:#f3e5f5,stroke:#6a1b9a,color:#1a1a1a
+    style SEN fill:#fff3e0,stroke:#e65100,color:#1a1a1a
+    style Severe fill:#ffebee,stroke:#b71c1c,color:#1a1a1a
+    style Mild fill:#e8f5e9,stroke:#1b5e20,color:#1a1a1a
+    style HealMem fill:#e8f5e9,stroke:#1b5e20,color:#1a1a1a
+    style Dash fill:#fce4ec,stroke:#880e4f,color:#1a1a1a
 ```
 
 **Persistence:** Store (InfluxStore, ApiStore, or in-memory) for vitals, baselines, workflow state, action log. ApiStore = server REST API (no direct DB on client). Optional: OTEL metrics export when configured. See `docs/DOCS.md` §2.

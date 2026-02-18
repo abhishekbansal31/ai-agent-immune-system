@@ -26,11 +26,12 @@ This document is the **single reference** for the AI Agent Immune System: archit
 ### 2.1 Topology overview
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#e8eaf6', 'primaryTextColor': '#1a1a1a', 'primaryBorderColor': '#3949ab', 'lineColor': '#37474f', 'secondaryColor': '#f3e5f5', 'tertiaryColor': '#e8f5e9', 'edgeLabelBackground': '#ffffff', 'clusterBkg': '#f5f5f5', 'clusterBorder': '#90a4ae'}}}%%
 flowchart TB
     subgraph client ["CLIENT SIDE (Customer environment)"]
         Agents["AI Agents<br/>Emit vitals per task"]
 
-        subgraph immune ["Immune System (same process / host)"]
+        subgraph immune ["Immune System"]
             Orch[Orchestrator]
             Tel[Telemetry] --> BL[Baseline]
             Orch --> Sen[Sentinel]
@@ -117,6 +118,7 @@ Entry point: `main.py` or `demo.py` with `SERVER_API_BASE_URL` (and optional `SE
 How agents and the immune system communicate. The system supports **two modes simultaneously**: simulated agents running in-process (for demos) and real external agents reporting via HTTP or the Python SDK.
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#e8eaf6', 'primaryTextColor': '#1a1a1a', 'primaryBorderColor': '#3949ab', 'lineColor': '#37474f', 'secondaryColor': '#f3e5f5', 'tertiaryColor': '#e8f5e9', 'edgeLabelBackground': '#ffffff', 'clusterBkg': '#f5f5f5', 'clusterBorder': '#90a4ae'}}}%%
 flowchart TB
     subgraph ext ["Real AI Agents"]
         direction LR
@@ -186,6 +188,7 @@ The system is an async control plane: persistence can be **InfluxDB-backed** (ru
 ### 3.1 HLD (High-Level Design)
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#e8eaf6', 'primaryTextColor': '#1a1a1a', 'primaryBorderColor': '#3949ab', 'lineColor': '#37474f', 'secondaryColor': '#f3e5f5', 'tertiaryColor': '#e8f5e9', 'edgeLabelBackground': '#ffffff'}}}%%
 flowchart TB
     A["Agent Sources"] --> B[Orchestrator]
     B --> C[Web Dashboard]
@@ -198,6 +201,7 @@ flowchart TB
 ### 3.2 LLD (Low-Level Design)
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#e8eaf6', 'primaryTextColor': '#1a1a1a', 'primaryBorderColor': '#3949ab', 'lineColor': '#37474f', 'secondaryColor': '#f3e5f5', 'tertiaryColor': '#e8f5e9', 'edgeLabelBackground': '#ffffff'}}}%%
 flowchart TD
     M["main.py / demo.py"] --> O[Orchestrator]
     M --> W[WebDashboard]
@@ -220,6 +224,7 @@ flowchart TD
 ### 3.3 Data flow (sequence)
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'actorTextColor': '#1a1a1a', 'actorBkg': '#e8eaf6', 'actorBorder': '#3949ab', 'actorLineColor': '#37474f', 'signalColor': '#37474f', 'signalTextColor': '#1a1a1a', 'labelTextColor': '#1a1a1a', 'loopTextColor': '#1a1a1a', 'noteBkgColor': '#fff9c4', 'noteTextColor': '#1a1a1a', 'noteBorderColor': '#f9a825', 'activationBkgColor': '#e8eaf6', 'activationBorderColor': '#3949ab'}}}%%
 sequenceDiagram
     participant A as Agent
     participant O as Orchestrator
@@ -439,11 +444,12 @@ When the immune system runs as **separate services** (not on the client):
 - **Backend:** Central DB (e.g. PostgreSQL or InfluxDB) for baselines, quarantine state, approvals, immune memory, action log. OTEL backend (e.g. Prometheus, Tempo, vendor) for metrics/traces.
 
 ```mermaid
+%%{init: {'theme': 'base', 'themeVariables': {'primaryColor': '#e8eaf6', 'primaryTextColor': '#1a1a1a', 'primaryBorderColor': '#3949ab', 'lineColor': '#37474f', 'secondaryColor': '#f3e5f5', 'tertiaryColor': '#e8f5e9', 'edgeLabelBackground': '#ffffff', 'clusterBkg': '#f5f5f5', 'clusterBorder': '#90a4ae'}}}%%
 flowchart TB
     Ingress["Ingress (TLS, auth)"]
     Ingress --> Dashboard & Gateway[API Gateway] & Webhooks
 
-    subgraph services ["Immune System Services (Pods)"]
+    subgraph services ["Immune Services (Pods)"]
         direction LR
         TI[Telemetry] ~~~ BL[Baseline] ~~~ Sen[Sentinel]
         QA[Quarantine] ~~~ Heal[Healer]
